@@ -31,18 +31,31 @@ const GUILD_ID='france-rp';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=s=>{try{return new Date(s).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'})}catch{return ''}};
-async function api(path){const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function dashboard(){
+const r=await fetch(SUPABASE_URL+'/functions/v1/francerpv3-api',{method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({action:'discord-dashboard'})});
+if(!r.ok)throw new Error('API HTTP '+r.status);
+return r.json();
+}
+const metric=v=>Number.isFinite(v)?Number(v).toLocaleString('fr-FR'):'—';
 async function load(){
 $('dbstatus').textContent='Connexion à la base…';$('dbstatus').classList.remove('ok');
 try{
-const stats=await api('discord_stats?select=guild_id,guild_name,member_count,online_count,boost_count,updated_at&order=updated_at.desc&limit=1');
-const logs=await api('discord_logs?select=event_type,summary,created_at&order=created_at.desc&limit=12');
+const data=await dashboard(),s=data.stats,logs=data.logs||[];
 $('logcount').textContent=String(logs.length);
-if(stats.length){const s=stats[0];$('members').textContent=Number(s.member_count).toLocaleString('fr-FR');$('online').textContent=Number(s.online_count).toLocaleString('fr-FR');$('boosts').textContent=Number(s.boost_count).toLocaleString('fr-FR');$('membersnote').textContent=esc(s.guild_name||'FRANCE RP');$('updated').textContent='Dernière mise à jour : '+date(s.updated_at)}else{$('membersnote').textContent='En attente de la première synchronisation du bot';$('updated').textContent='Base connectée, mais aucune statistique Discord n’a encore été envoyée.'}
+if(s){
+$('members').textContent=metric(s.member_count);$('online').textContent=metric(s.online_count);$('boosts').textContent=metric(s.boost_count);
+$('membersnote').textContent=esc(s.guild_name||'FRANCE RP');
+$('updated').textContent='Dernière synchronisation : '+date(s.updated_at);
+}else{
+$('members').textContent='—';$('online').textContent='—';$('boosts').textContent='—';
+$('membersnote').textContent='En attente de données publiques Discord';
+$('updated').textContent='Aucune statistique disponible. Vérifie que l’invitation du serveur est valide et que les statistiques publiques sont accessibles.';
+}
 const icons={member_join:'🟢',member_leave:'👋',message_delete:'🧹',message_edit:'✏️',role_update:'🛡️',moderation:'⚖️',voice:'🎙️',other:'📌'};
-$('logslist').innerHTML=logs.length?logs.map(l=>'<article class="log"><div class="logicon">'+(icons[l.event_type]||'📌')+'</div><div><strong>'+esc(l.summary)+'</strong><small>'+esc(l.event_type.replaceAll('_',' '))+' · '+esc(date(l.created_at))+'</small></div></article>').join(''):'<div class="empty">Aucun événement public enregistré pour le moment.<br>Les logs apparaîtront ici après connexion du bot.</div>';
-$('dbstatus').textContent='Base connectée';$('dbstatus').classList.add('ok');
-}catch(e){$('dbstatus').textContent='Base inaccessible';$('logslist').innerHTML='<div class="empty">Impossible de charger les données pour le moment. Vérifie la configuration Data API / les permissions de la base.</div>';console.error(e)}
+$('logslist').innerHTML=logs.length?logs.map(l=>'<article class="log"><div class="logicon">'+(icons[l.event_type]||'📌')+'</div><div><strong>'+esc(l.summary)+'</strong><small>'+esc(l.event_type.replaceAll('_',' '))+' · '+esc(date(l.created_at))+'</small></div></article>').join(''):'<div class="empty">Aucun événement public enregistré pour le moment.<br>Les logs réels apparaîtront ici lorsque le bot Discord sera relié.</div>';
+$('dbstatus').textContent=data.invite_available?'Base connectée · Discord synchronisé':'Base connectée · stats Discord indisponibles';
+$('dbstatus').classList.add('ok');
+}catch(e){$('dbstatus').textContent='Connexion impossible';$('logslist').innerHTML='<div class="empty">Impossible de charger les données. Réessaie dans un instant.</div>';console.error(e)}
 }
 $('refresh').addEventListener('click',load);load();setInterval(load,60000);
 </script>
